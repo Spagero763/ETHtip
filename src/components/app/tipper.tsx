@@ -158,10 +158,11 @@ export function Tipper() {
       setStatus(`Tip sent successfully!`);
       setTxHash(callsId);
       form.reset();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Send tip failed:", error);
       setStatus("Tip transaction failed.");
-      toast({ variant: "destructive", title: "Transaction Failed", description: "The tip could not be sent. Please try again." });
+      const errorMessage = error?.message || "The tip could not be sent. Please try again.";
+      toast({ variant: "destructive", title: "Transaction Failed", description: errorMessage });
     } finally {
       setLoading(false);
     }
