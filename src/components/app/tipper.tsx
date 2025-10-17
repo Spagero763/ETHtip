@@ -6,7 +6,7 @@ import { isAddress, parseEther, type EIP1193Provider } from "viem";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { APP_NAME, APP_LOGO_URL, SUPPORTED_CHAIN, DEFAULT_TIP_AMOUNT_ETH, MIN_TIP_AMOUNT_ETH } from "@/lib/constants";
+import { APP_NAME, APP_LOGO_URL, SUPPORTED_CHAIN, DEFAULT_TIP_AMOUNT_ETH, MIN_TIP_AMOUNT_ETH, SUB_ACCOUNT_ADDRESS } from "@/lib/constants";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -91,28 +91,18 @@ export function Tipper() {
     setStatus("Connecting wallet...");
     setTxHash(null);
     try {
-      // Connect to the wallet - with auto sub-account creation, the sub-account will be the first account
       const accounts = (await provider.request({ method: "eth_requestAccounts" })) as `0x${string}`[];
       const universalAddr = accounts[0];
-      const subAccountAddr = accounts[1]; // Sub-account is the second account when not using auto mode
-      
       setUniversalAddress(universalAddr);
       setConnected(true);
-      setStatus("Checking for Sub-account...");
+      setStatus("Using predefined Sub-account...");
 
-      // Check for existing sub account
-      const response = (await provider.request({
-        method: "wallet_getSubAccounts",
-        params: [{ account: universalAddr, domain: window.location.origin }],
-      } as any)) as GetSubAccountsResponse;
-
-      const existing = response.subAccounts[0];
-      if (existing) {
-        setSubAccount(existing);
-        setStatus("Sub-account found. Ready to tip!");
-      } else {
-        setStatus("Wallet connected! Please create a Sub-account to start tipping.");
-      }
+      // Use the predefined sub-account address
+      const predefinedSubAccount: SubAccount = {
+        address: SUB_ACCOUNT_ADDRESS
+      };
+      setSubAccount(predefinedSubAccount);
+      setStatus("Sub-account ready. You can now send Base ETH tips!");
     } catch (error) {
       console.error("Connection failed:", error);
       setStatus("Wallet connection failed.");
@@ -122,30 +112,6 @@ export function Tipper() {
     }
   };
 
-  const createSubAccount = async () => {
-    if (!provider) return;
-    setLoading(true);
-    setStatus("Creating Sub-account...");
-    setTxHash(null);
-    try {
-      const newSubAccount = (await provider.request({
-        method: "wallet_addSubAccount",
-        params: [{
-          account: {
-            type: 'create',
-          },
-        }],
-      } as any)) as SubAccount;
-      setSubAccount(newSubAccount);
-      setStatus("Sub-account created successfully! You can now send tips.");
-    } catch (error) {
-      console.error("Sub-account creation failed:", error);
-      setStatus("Sub-account creation failed.");
-      toast({ variant: "destructive", title: "Creation Failed", description: "User rejected the sub-account creation." });
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const sendTip = async (data: TipperFormValues) => {
     if (!provider || !subAccount) return;
@@ -193,14 +159,6 @@ export function Tipper() {
         <Button onClick={connectWallet} disabled={loading || !provider} size="lg" className="w-full">
           {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
           Connect Wallet
-        </Button>
-      );
-    }
-    if (!subAccount) {
-      return (
-        <Button onClick={createSubAccount} disabled={loading} size="lg" className="w-full">
-          {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ArrowRight className="mr-2 h-4 w-4" />}
-          Create Sub-Account
         </Button>
       );
     }
