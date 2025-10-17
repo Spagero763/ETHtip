@@ -6,7 +6,7 @@ import { isAddress, parseEther, type EIP1193Provider } from "viem";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { APP_NAME, APP_LOGO_URL, SUPPORTED_CHAIN, DEFAULT_TIP_AMOUNT_ETH, MIN_TIP_AMOUNT_ETH, SUB_ACCOUNT_ADDRESS } from "@/lib/constants";
+import { APP_NAME, APP_LOGO_URL, SUPPORTED_CHAIN, DEFAULT_TIP_AMOUNT_ETH, MIN_TIP_AMOUNT_ETH } from "@/lib/constants";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -91,18 +91,21 @@ export function Tipper() {
     setStatus("Connecting wallet...");
     setTxHash(null);
     try {
+      // With defaultAccount: 'sub', the sub-account will be the first account
       const accounts = (await provider.request({ method: "eth_requestAccounts" })) as `0x${string}`[];
-      const universalAddr = accounts[0];
+      const subAccountAddr = accounts[0]; // Sub-account is first with auto mode
+      const universalAddr = accounts[1]; // Universal account is second
+      
       setUniversalAddress(universalAddr);
       setConnected(true);
-      setStatus("Using predefined Sub-account...");
+      setStatus("Checking for Sub-account...");
 
-      // Use the predefined sub-account address
-      const predefinedSubAccount: SubAccount = {
-        address: SUB_ACCOUNT_ADDRESS
+      // Create sub-account object
+      const subAccount: SubAccount = {
+        address: subAccountAddr
       };
-      setSubAccount(predefinedSubAccount);
-      setStatus("Sub-account ready. You can now send Base ETH tips!");
+      setSubAccount(subAccount);
+      setStatus("Sub-account ready. You can now send Base ETH tips without pop-ups!");
     } catch (error) {
       console.error("Connection failed:", error);
       setStatus("Wallet connection failed.");
@@ -126,21 +129,24 @@ export function Tipper() {
         data: '0x' as const,
       }];
 
+      // Use wallet_sendCalls with sub-account as sender
+      // This should not trigger wallet pop-ups due to auto spend permissions
       const callsId = (await provider.request({
         method: "wallet_sendCalls",
         params: [{
           version: "2.0",
           atomicRequired: true,
           chainId: `0x${SUPPORTED_CHAIN.id.toString(16)}`,
-          from: subAccount.address,
+          from: subAccount.address, // Send from sub-account
           calls,
           capabilities: {
+            // Auto spend permissions will handle funding automatically
             // https://docs.cdp.coinbase.com/paymaster/introduction/welcome
             // paymasterUrl: "your paymaster url",
           },
         }],
       })) as string;
-      setStatus(`Tip sent successfully!`);
+      setStatus(`Tip sent successfully! No pop-ups required.`);
       setTxHash(callsId);
       form.reset();
     } catch (error: any) {
@@ -217,7 +223,7 @@ export function Tipper() {
     <Card className="max-w-md mx-auto shadow-xl">
       <CardHeader>
         <CardTitle className="text-2xl font-bold">Frictionless Tips on Base</CardTitle>
-        <CardDescription>Send tips in Base ETH on Base Mainnet without constant wallet pop-ups.</CardDescription>
+        <CardDescription>Send tips in Base ETH on Base Mainnet with Sub Accounts and Auto Spend Permissions - no wallet pop-ups required!</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         {renderContent()}
