@@ -6,7 +6,7 @@ import { isAddress, parseEther, type EIP1193Provider } from "viem";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { APP_NAME, APP_LOGO_URL, SUPPORTED_CHAIN, DEFAULT_TIP_AMOUNT_ETH } from "@/lib/constants";
+import { APP_NAME, APP_LOGO_URL, SUPPORTED_CHAIN, DEFAULT_TIP_AMOUNT_ETH, MIN_TIP_AMOUNT_ETH } from "@/lib/constants";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -28,8 +28,12 @@ const formSchema = z.object({
   recipient: z.string().refine((val) => isAddress(val), {
     message: "Please enter a valid Ethereum address.",
   }),
-  amount: z.string().refine((val) => !isNaN(parseFloat(val)) && parseFloat(val) > 0, {
-    message: "Please enter a valid amount.",
+  amount: z.string().refine((val) => {
+    const numVal = parseFloat(val);
+    const minVal = parseFloat(MIN_TIP_AMOUNT_ETH);
+    return !isNaN(numVal) && numVal >= minVal;
+  }, {
+    message: `Please enter a valid amount. Minimum is ${MIN_TIP_AMOUNT_ETH} Base ETH.`,
   }),
 });
 
@@ -60,6 +64,10 @@ export function Tipper() {
           appName: APP_NAME,
           appLogoUrl: APP_LOGO_URL,
           appChainIds: [SUPPORTED_CHAIN.id],
+          subAccounts: {
+            creation: 'on-connect',
+            defaultAccount: 'sub',
+          }
         });
         const providerInstance = sdkInstance.getProvider() as EIP1193Provider;
         setProvider(providerInstance);
@@ -83,24 +91,21 @@ export function Tipper() {
     setStatus("Connecting wallet...");
     setTxHash(null);
     try {
+      // With defaultAccount: 'sub', the sub-account will be the first account
       const accounts = (await provider.request({ method: "eth_requestAccounts" })) as `0x${string}`[];
-      const universalAddr = accounts[0];
+      const subAccountAddr = accounts[0]; // Sub-account is first with auto mode
+      const universalAddr = accounts[1]; // Universal account is second
+      
       setUniversalAddress(universalAddr);
       setConnected(true);
       setStatus("Checking for Sub-account...");
 
-      const response = (await provider.request({
-        method: "wallet_getSubAccount",
-        params: [{ account: universalAddr, domain: window.location.origin }],
-      } as any)) as GetSubAccountsResponse;
-
-      const existing = response.subAccounts[0];
-      if (existing) {
-        setSubAccount(existing);
-        setStatus("Sub-account found. Ready to tip!");
-      } else {
-        setStatus("Wallet connected! Please create a Sub-account to start tipping.");
-      }
+      // Create sub-account object
+      const subAccount: SubAccount = {
+        address: subAccountAddr
+      };
+      setSubAccount(subAccount);
+      setStatus("Sub-account ready. You can now send Base ETH tips without pop-ups!");
     } catch (error) {
       console.error("Connection failed:", error);
       setStatus("Wallet connection failed.");
@@ -110,32 +115,6 @@ export function Tipper() {
     }
   };
 
-  const createSubAccount = async () => {
-    if (!provider) return;
-    setLoading(true);
-    setStatus("Creating Sub-account...");
-    setTxHash(null);
-    try {
-      const newSubAccount = (await provider.request({
-        method: "wallet_addSubAccount",
-        params: [{ 
-          version: '1',
-          account: { 
-            type: 'create',
-            keys: []
-          } 
-        }],
-      } as any)) as SubAccount;
-      setSubAccount(newSubAccount);
-      setStatus("Sub-account created successfully! You can now send tips.");
-    } catch (error) {
-      console.error("Sub-account creation failed:", error);
-      setStatus("Sub-account creation failed.");
-      toast({ variant: "destructive", title: "Creation Failed", description: "User rejected the sub-account creation." });
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const sendTip = async (data: TipperFormValues) => {
     if (!provider || !subAccount) return;
@@ -150,18 +129,24 @@ export function Tipper() {
         data: '0x' as const,
       }];
 
+      // Use wallet_sendCalls with sub-account as sender
+      // This should not trigger wallet pop-ups due to auto spend permissions
       const callsId = (await provider.request({
         method: "wallet_sendCalls",
         params: [{
           version: "2.0",
           atomicRequired: true,
           chainId: `0x${SUPPORTED_CHAIN.id.toString(16)}`,
-          from: subAccount.address,
+          from: subAccount.address, // Send from sub-account
           calls,
-          capabilities: {},
+          capabilities: {
+            // Auto spend permissions will handle funding automatically
+            // https://docs.cdp.coinbase.com/paymaster/introduction/welcome
+            // paymasterUrl: "your paymaster url",
+          },
         }],
       })) as string;
-      setStatus(`Tip sent successfully!`);
+      setStatus(`Tip sent successfully! No pop-ups required.`);
       setTxHash(callsId);
       form.reset();
     } catch (error: any) {
@@ -180,14 +165,6 @@ export function Tipper() {
         <Button onClick={connectWallet} disabled={loading || !provider} size="lg" className="w-full">
           {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
           Connect Wallet
-        </Button>
-      );
-    }
-    if (!subAccount) {
-      return (
-        <Button onClick={createSubAccount} disabled={loading} size="lg" className="w-full">
-          {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ArrowRight className="mr-2 h-4 w-4" />}
-          Create Sub-Account
         </Button>
       );
     }
@@ -212,9 +189,15 @@ export function Tipper() {
             name="amount"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Amount (ETH)</FormLabel>
+                <FormLabel>Amount (Base ETH)</FormLabel>
                 <FormControl>
-                  <Input type="number" step="any" {...field} />
+                  <Input 
+                    type="number" 
+                    step="0.000000000000001" 
+                    min={MIN_TIP_AMOUNT_ETH}
+                    placeholder={`Min: ${MIN_TIP_AMOUNT_ETH}`}
+                    {...field} 
+                  />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -222,7 +205,7 @@ export function Tipper() {
           />
           <Button type="submit" disabled={loading} className="w-full" size="lg">
             {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
-            Send Tip
+            Send Base ETH Tip
           </Button>
         </form>
       </Form>
@@ -240,7 +223,7 @@ export function Tipper() {
     <Card className="max-w-md mx-auto shadow-xl">
       <CardHeader>
         <CardTitle className="text-2xl font-bold">Frictionless Tips on Base</CardTitle>
-        <CardDescription>Send tips on Base Mainnet without constant wallet pop-ups.</CardDescription>
+        <CardDescription>Send tips in Base ETH on Base Mainnet with Sub Accounts and Auto Spend Permissions - no wallet pop-ups required!</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         {renderContent()}
