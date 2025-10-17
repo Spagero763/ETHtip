@@ -6,7 +6,7 @@ import { isAddress, parseEther, type EIP1193Provider } from "viem";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { APP_NAME, APP_LOGO_URL, SUPPORTED_CHAIN, DEFAULT_TIP_AMOUNT_ETH } from "@/lib/constants";
+import { APP_NAME, APP_LOGO_URL, SUPPORTED_CHAIN, DEFAULT_TIP_AMOUNT_ETH, MIN_TIP_AMOUNT_ETH } from "@/lib/constants";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -28,8 +28,12 @@ const formSchema = z.object({
   recipient: z.string().refine((val) => isAddress(val), {
     message: "Please enter a valid Ethereum address.",
   }),
-  amount: z.string().refine((val) => !isNaN(parseFloat(val)) && parseFloat(val) > 0, {
-    message: "Please enter a valid amount.",
+  amount: z.string().refine((val) => {
+    const numVal = parseFloat(val);
+    const minVal = parseFloat(MIN_TIP_AMOUNT_ETH);
+    return !isNaN(numVal) && numVal >= minVal;
+  }, {
+    message: `Please enter a valid amount. Minimum is ${MIN_TIP_AMOUNT_ETH} Base ETH.`,
   }),
 });
 
@@ -221,9 +225,15 @@ export function Tipper() {
             name="amount"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Amount (ETH)</FormLabel>
+                <FormLabel>Amount (Base ETH)</FormLabel>
                 <FormControl>
-                  <Input type="number" step="any" {...field} />
+                  <Input 
+                    type="number" 
+                    step="0.000000000000001" 
+                    min={MIN_TIP_AMOUNT_ETH}
+                    placeholder={`Min: ${MIN_TIP_AMOUNT_ETH}`}
+                    {...field} 
+                  />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -231,7 +241,7 @@ export function Tipper() {
           />
           <Button type="submit" disabled={loading} className="w-full" size="lg">
             {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
-            Send Tip
+            Send Base ETH Tip
           </Button>
         </form>
       </Form>
@@ -249,7 +259,7 @@ export function Tipper() {
     <Card className="max-w-md mx-auto shadow-xl">
       <CardHeader>
         <CardTitle className="text-2xl font-bold">Frictionless Tips on Base</CardTitle>
-        <CardDescription>Send tips on Base Mainnet without constant wallet pop-ups.</CardDescription>
+        <CardDescription>Send tips in Base ETH on Base Mainnet without constant wallet pop-ups.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         {renderContent()}
