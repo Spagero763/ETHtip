@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
-import { AlertCircle, ArrowRight, CheckCircle, Info, Loader2, Send } from "lucide-react";
+import { AlertCircle, ArrowRight, CheckCircle, Info, Loader2, Send, Wallet } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "../ui/alert";
 
 // Type definitions from Base SDK examples
