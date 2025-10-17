@@ -48,7 +48,7 @@ export function Tipper() {
   const form = useForm<TipperFormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      recipient: "",
+      recipient: "0x0000000000000000000000000000000000000000" as `0x${string}`,
       amount: DEFAULT_TIP_AMOUNT_ETH,
     },
   });
@@ -61,7 +61,7 @@ export function Tipper() {
           appLogoUrl: APP_LOGO_URL,
           appChainIds: [SUPPORTED_CHAIN.id],
         });
-        const providerInstance = sdkInstance.getProvider();
+        const providerInstance = sdkInstance.getProvider() as EIP1193Provider;
         setProvider(providerInstance);
         setStatus("Ready to connect.");
       } catch (error) {
@@ -90,9 +90,9 @@ export function Tipper() {
       setStatus("Checking for Sub-account...");
 
       const response = (await provider.request({
-        method: "wallet_getSubAccounts",
+        method: "wallet_getSubAccount",
         params: [{ account: universalAddr, domain: window.location.origin }],
-      })) as GetSubAccountsResponse;
+      } as any)) as GetSubAccountsResponse;
 
       const existing = response.subAccounts[0];
       if (existing) {
@@ -118,8 +118,14 @@ export function Tipper() {
     try {
       const newSubAccount = (await provider.request({
         method: "wallet_addSubAccount",
-        params: [{ account: { type: 'create' } }],
-      })) as SubAccount;
+        params: [{ 
+          version: '1',
+          account: { 
+            type: 'create',
+            keys: []
+          } 
+        }],
+      } as any)) as SubAccount;
       setSubAccount(newSubAccount);
       setStatus("Sub-account created successfully! You can now send tips.");
     } catch (error) {
@@ -140,7 +146,7 @@ export function Tipper() {
       const weiValue = parseEther(data.amount);
       const calls = [{
         to: data.recipient as `0x${string}`,
-        value: `0x${weiValue.toString(16)}`,
+        value: `0x${weiValue.toString(16)}` as `0x${string}`,
         data: '0x' as const,
       }];
 
